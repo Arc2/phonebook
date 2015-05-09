@@ -3,7 +3,7 @@ from contextlib import closing
 import sqlite3
 
 # configuration
-DATABASE = 'db/contacts.db'
+DATABASE = 'db/phonebook.db'
 DEBUG = True
 SECRET_KEY = 'development key'
 EMAIL = 'admin@admin.com'
@@ -13,8 +13,22 @@ app = Flask(__name__)
 app.config.from_object(__name__)
 
 
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = connect_db()
+    return db
+
+
 def connect_db():
     return sqlite3.connect(app.config['DATABASE'])
+
+
+def query_db(query, args=(), one=False):
+    cur = get_db().execute(query, args)
+    rv = cur.fetchall()
+    cur.close()
+    return (rv[0] if rv else None) if one else rv
 
 
 def init_db():
@@ -30,7 +44,7 @@ def before_request():
 
 
 @app.teardown_request
-def teardown_request(exception):
+def teardown_request():
     db = getattr(g, 'db', None)
     if db is not None:
         db.close()
@@ -40,10 +54,13 @@ def teardown_request(exception):
 def hello_world():
     return "Hello World!"
 
+
 @app.route('/login', methods=['POST'])
 def login():
-    if request.form['email'] is None:
-        return jsonify(status="ok", uid=2)
+    cur = g.db.execute('SELECT email, password, uid FROM accounts ORDER BY uid ASC')
+    # credentials = [dict(email=row[0], password=row[1]) for row in cur.fetchall()]
+    # if request.json['email'] in credentials:
+    return jsonify(status="ok", uid=2)
 
 
 @app.route('/account', methods=['GET'])
@@ -59,12 +76,32 @@ def logout():
 
 @app.route('/register', methods=['POST'])
 def register():
-    return "Register"
+    mail = request.json['email']
+    g.db.execute('INSERT INTO accounts (email, password) VALUES (?, ?)',
+                 [mail, request.json['password']])
+    g.db.commit()
+    user = query_db('SELECT email, uid FROM accounts WHERE email = ?',
+                    [mail], one=True)
+    return user['uid']
+    # return jsonify(status="ok", uid="2")
 
 
 @app.route('/contacts', methods=['POST', 'GET'])
 def contacts():
-    return "helol"
+    if request.method == 'POST':
+        result = request.json
+        result['uid'] = 2
+        result['id'] = 1
+        g.db.execute('INSERT INTO contacts (id, name, telephone, address, comment, owner) VALUES (NULL, ?, ?, ?, ?, ?)',
+                     [result['name'], result['telephone'], result['address'],
+                      result['comment'], result['uid']])
+        g.db.commit()
+        return jsonify(result)
+    if request.method == 'GET':
+        uid = 2
+        contacts_dict = query_db('SELECT id, name, telephone, address, comment, owner FROM contacts WHERE owner = ?',
+                                 [uid])
+        return jsonify({'contacts': contacts_dict})
 
 
 @app.route('/contacts/<int:contact_id>', methods=['DELETE'])

@@ -7,3 +7,10 @@ create table contacts (
   comment text,
   owner integer not null
 );
+
+DROP TABLE IF EXISTS accounts;
+CREATE TABLE accounts (
+  uid      INTEGER PRIMARY KEY AUTOINCREMENT,
+  email    TEXT NOT NULL,
+  password TEXT NOT NULL
+);
