@@ -12,6 +12,9 @@ PASSWORD = 'admin'
 app = Flask(__name__)
 app.config.from_object(__name__)
 
+current_user = None
+
+# TODO !CLEAN THE FREAKING CODE!
 
 def get_db():
     db = getattr(g, '_database', None)
@@ -38,6 +41,16 @@ def init_db():
         db.commit()
 
 
+def is_valid_login(credentials):
+    # error = None
+    cur = g.db.execute('SELECT email, password FROM accounts WHERE email = ?',
+                       [credentials["email"]])
+    for row in cur:
+        if dict(email=row[0], password=row[1]) == credentials:
+            return True
+    return False
+
+
 @app.before_request
 def before_request():
     g.db = connect_db()
@@ -57,51 +70,67 @@ def hello_world():
 
 @app.route('/login', methods=['POST'])
 def login():
-    cur = g.db.execute('SELECT email, password, uid FROM accounts ORDER BY uid ASC')
-    # credentials = [dict(email=row[0], password=row[1]) for row in cur.fetchall()]
-    # if request.json['email'] in credentials:
-    return jsonify(status="ok", uid=2)
+    credentials = dict(email=request.json['email'], password=request.json['password'])
+    cur = g.db.execute(
+        'SELECT uid FROM accounts WHERE email = ?',
+        [credentials["email"]])
+    for row in cur:
+        # TODO check what cur is and handle it better
+        session['uid'] = row[0]
+    if is_valid_login(credentials):
+        session['email'] = credentials["email"]
+        return jsonify(status="ok", uid=session['uid'])
+    else:
+        abort(404)
 
 
 @app.route('/account', methods=['GET'])
 def account_info():
-    res = jsonify(uid=2, email="email@gmail.com")
+    res = jsonify(uid=session['uid'], email=session['email'])
     return res
 
 
 @app.route('/logout', methods=['POST'])
 def logout():
+    session.pop('email', None)
+    session.pop('uid', None)
     return jsonify(status="ok")
 
 
 @app.route('/register', methods=['POST'])
 def register():
-    mail = request.json['email']
+    # TODO check if already exists
+    cur = g.db.execute(
+        'SELECT uid FROM accounts WHERE email = ?',
+        [request.json["email"]])
+    for row in cur:
+        abort(403)
     g.db.execute('INSERT INTO accounts (email, password) VALUES (?, ?)',
-                 [mail, request.json['password']])
+                 [request.json['email'], request.json['password']])
     g.db.commit()
-    user = query_db('SELECT email, uid FROM accounts WHERE email = ?',
-                    [mail], one=True)
-    return user['uid']
-    # return jsonify(status="ok", uid="2")
+    user = query_db('SELECT uid FROM accounts WHERE email = ?',
+                    [request.json['email']], one=True)
+    session['email'] = request.json['email']
+    session['uid'] = user[0]
+    return jsonify(status="ok", uid=session['uid'])
 
 
 @app.route('/contacts', methods=['POST', 'GET'])
 def contacts():
+    # TODO make it work with actual id!
     if request.method == 'POST':
         contact = request.json
-        contact['uid'] = 2
-        contact['id'] = 1
+        contact['uid'] = session['uid']
         g.db.execute('INSERT INTO contacts (id, name, telephone, address, comment, owner) VALUES (NULL, ?, ?, ?, ?, ?)',
                      [contact['name'], contact['telephone'], contact['address'],
                       contact['comment'], contact['uid']])
         g.db.commit()
+        contact['id'] = None
         return jsonify(contact)
     if request.method == 'GET':
-        uid = 2
         cur = g.db.execute(
             'SELECT id, name, telephone, address, comment, owner FROM contacts WHERE owner = ?',
-            [uid])
+            [session['uid']])
         contacts_dict = [dict(id=row[0], name=row[1], telephone=row[2], address=row[3], comment=row[4], owner=row[5])
                          for row in
                          cur.fetchall()]
@@ -110,11 +139,17 @@ def contacts():
 
 @app.route('/contacts/<int:contact_id>', methods=['DELETE'])
 def delete_contact(contact_id):
-    uid = 2
-    g.db.execute('DELETE FROM contacts WHERE id = ? AND owner = ?',
-                 [contact_id, uid])
-    g.db.commit()
-    return Response(status=204)
+    # TODO make it work with actual uid
+    cur = g.db.execute('SELECT id, name, telephone, address, comment, owner FROM contacts WHERE owner = ?',
+                       [session['uid']])
+    for row in cur.fetchall():
+        if row is not None:
+            g.db.execute('DELETE FROM contacts WHERE id = ? AND owner = ?',
+                         [contact_id, session['uid']])
+            g.db.commit()
+            return Response(status=204)
+    abort(404)
+    # TODO check if this works
 
 
 if __name__ == '__main__':

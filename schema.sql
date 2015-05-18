@@ -11,6 +11,6 @@ create table contacts (
 DROP TABLE IF EXISTS accounts;
 CREATE TABLE accounts (
   uid      INTEGER PRIMARY KEY AUTOINCREMENT,
-  email    TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
   password TEXT NOT NULL
 );
