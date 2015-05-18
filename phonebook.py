@@ -1,4 +1,4 @@
-from flask import Flask, url_for, request, session, g, redirect, Response, jsonify, make_response
+from flask import Flask, url_for, request, session, g, redirect, Response, jsonify, make_response, abort
 from contextlib import closing
 import sqlite3
 
@@ -44,7 +44,7 @@ def before_request():
 
 
 @app.teardown_request
-def teardown_request():
+def teardown_request(exception):
     db = getattr(g, 'db', None)
     if db is not None:
         db.close()
@@ -89,24 +89,32 @@ def register():
 @app.route('/contacts', methods=['POST', 'GET'])
 def contacts():
     if request.method == 'POST':
-        result = request.json
-        result['uid'] = 2
-        result['id'] = 1
+        contact = request.json
+        contact['uid'] = 2
+        contact['id'] = 1
         g.db.execute('INSERT INTO contacts (id, name, telephone, address, comment, owner) VALUES (NULL, ?, ?, ?, ?, ?)',
-                     [result['name'], result['telephone'], result['address'],
-                      result['comment'], result['uid']])
+                     [contact['name'], contact['telephone'], contact['address'],
+                      contact['comment'], contact['uid']])
         g.db.commit()
-        return jsonify(result)
+        return jsonify(contact)
     if request.method == 'GET':
         uid = 2
-        contacts_dict = query_db('SELECT id, name, telephone, address, comment, owner FROM contacts WHERE owner = ?',
-                                 [uid])
+        cur = g.db.execute(
+            'SELECT id, name, telephone, address, comment, owner FROM contacts WHERE owner = ?',
+            [uid])
+        contacts_dict = [dict(id=row[0], name=row[1], telephone=row[2], address=row[3], comment=row[4], owner=row[5])
+                         for row in
+                         cur.fetchall()]
         return jsonify({'contacts': contacts_dict})
 
 
 @app.route('/contacts/<int:contact_id>', methods=['DELETE'])
 def delete_contact(contact_id):
-    return contact_id
+    uid = 2
+    g.db.execute('DELETE FROM contacts WHERE id = ? AND owner = ?',
+                 [contact_id, uid])
+    g.db.commit()
+    return Response(status=204)
 
 
 if __name__ == '__main__':
