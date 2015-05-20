@@ -70,6 +70,8 @@ def hello_world():
 
 @app.route('/login', methods=['POST'])
 def login():
+    if 'uid' in session:
+        abort(400)
     credentials = dict(email=request.json['email'], password=request.json['password'])
     cur = g.db.execute(
         'SELECT uid FROM accounts WHERE email = ?',
@@ -86,12 +88,16 @@ def login():
 
 @app.route('/account', methods=['GET'])
 def account_info():
+    if 'uid' not in session:
+        abort(401)
     res = jsonify(uid=session['uid'], email=session['email'])
     return res
 
 
 @app.route('/logout', methods=['POST'])
 def logout():
+    if 'uid' not in session:
+        abort(401)
     session.pop('email', None)
     session.pop('uid', None)
     return jsonify(status="ok")
@@ -99,7 +105,6 @@ def logout():
 
 @app.route('/register', methods=['POST'])
 def register():
-    # TODO check if already exists
     cur = g.db.execute(
         'SELECT uid FROM accounts WHERE email = ?',
         [request.json["email"]])
@@ -117,7 +122,9 @@ def register():
 
 @app.route('/contacts', methods=['POST', 'GET'])
 def contacts():
-    # TODO make it work with actual id!
+    # TODO better handle cur again!
+    if 'uid' not in session:
+        abort(401)
     if request.method == 'POST':
         contact = request.json
         contact['uid'] = session['uid']
@@ -126,6 +133,9 @@ def contacts():
                       contact['comment'], contact['uid']])
         g.db.commit()
         contact['id'] = None
+        cur = g.db.execute('SELECT id FROM contacts ORDER BY id DESC')
+        for row in cur.fetchall():
+            contact['id'] = row[0]
         return jsonify(contact)
     if request.method == 'GET':
         cur = g.db.execute(
@@ -139,6 +149,8 @@ def contacts():
 
 @app.route('/contacts/<int:contact_id>', methods=['DELETE'])
 def delete_contact(contact_id):
+    if 'uid' not in session:
+        abort(401)
     # TODO make it work with actual uid
     cur = g.db.execute('SELECT id, name, telephone, address, comment, owner FROM contacts WHERE owner = ?',
                        [session['uid']])
