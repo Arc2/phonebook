@@ -12,8 +12,6 @@ PASSWORD = 'admin'
 app = Flask(__name__)
 app.config.from_object(__name__)
 
-current_user = None
-
 # TODO !CLEAN THE FREAKING CODE!
 
 def get_db():
