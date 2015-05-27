@@ -1,18 +1,14 @@
-from flask import Flask, url_for, request, session, g, redirect, Response, jsonify, make_response, abort
+from flask import Flask, request, session, g, Response, jsonify, abort
 from contextlib import closing
 import sqlite3
 
 # configuration
 DATABASE = 'db/phonebook.db'
-DEBUG = True
 SECRET_KEY = 'development key'
-EMAIL = 'admin@admin.com'
-PASSWORD = 'admin'
 
 app = Flask(__name__)
 app.config.from_object(__name__)
 
-# TODO !CLEAN THE FREAKING CODE!
 
 def get_db():
     db = getattr(g, '_database', None)
@@ -61,11 +57,6 @@ def teardown_request(exception):
         db.close()
 
 
-@app.route('/')
-def hello_world():
-    return "Hello World!"
-
-
 @app.route('/login', methods=['POST'])
 def login():
     if 'uid' in session:
@@ -74,11 +65,11 @@ def login():
     cur = g.db.execute(
         'SELECT uid FROM accounts WHERE email = ?',
         [credentials["email"]])
-    for row in cur:
-        # TODO check what cur is and handle it better
-        session['uid'] = row[0]
+
     if is_valid_login(credentials):
         session['email'] = credentials["email"]
+        for row in cur:
+            session['uid'] = row[0]
         return jsonify(status="ok", uid=session['uid'])
     else:
         abort(404)
@@ -120,7 +111,6 @@ def register():
 
 @app.route('/contacts', methods=['POST', 'GET'])
 def contacts():
-    # TODO better handle cur again!
     if 'uid' not in session:
         abort(401)
     if request.method == 'POST':
@@ -149,7 +139,6 @@ def contacts():
 def delete_contact(contact_id):
     if 'uid' not in session:
         abort(401)
-    # TODO make it work with actual uid
     cur = g.db.execute('SELECT id, name, telephone, address, comment, owner FROM contacts WHERE owner = ?',
                        [session['uid']])
     for row in cur.fetchall():
@@ -159,8 +148,7 @@ def delete_contact(contact_id):
             g.db.commit()
             return Response(status=204)
     abort(404)
-    # TODO check if this works
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=False, host='0.0.0.0')
